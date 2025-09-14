@@ -10,7 +10,7 @@ This directory contains a Kubernetes chart to deploy a private Docker Registry.
 
 This chart will do the following:
 
-* Implement a Docker registry deployment
+* Implement a Docker registry StatefulSet (replaces the previous Deployment for better state management)
 
 ## Installing the Chart
 
@@ -46,7 +46,7 @@ their default values.
 | `serviceAccount.create`     | Create ServiceAccount                                                                      | `false`         |
 | `serviceAccount.name`       | ServiceAccount name                                                                        | `nil`           |
 | `serviceAccount.annotations` | Annotations to add to the ServiceAccount                                                  | `{}`            |
-| `deployment.annotations`    | Annotations to add to the Deployment                                                       | `{}`            |
+| `deployment.annotations`    | Annotations to add to the StatefulSet                                                       | `{}`            |
 | `service.port`              | TCP port on which the service is exposed                                                   | `5000`          |
 | `service.type`              | service type                                                                               | `ClusterIP`     |
 | `service.clusterIP`         | if `service.type` is `ClusterIP` and this is non-empty, sets the cluster IP of the service | `nil`           |
@@ -56,9 +56,9 @@ their default values.
 | `service.sessionAffinity`       | service session affinity                                                               | `nil`           |
 | `service.sessionAffinityConfig` | service session affinity config                                                        | `nil`           |
 | `replicaCount`              | k8s replicas                                                                               | `1`             |
-| `updateStrategy`            | update strategy for deployment                                                             | `{}`            |
-| `podAnnotations`            | Annotations for deployment pod, and `garbageCollect` pod unless set explicitly there. See `garbageCollect` | `{}` |
-| `podLabels`                 | Labels for deployment pod, and `garbageCollect` pod unless set explicitly there. See `garbageCollect` | `{}` |
+| `updateStrategy`            | update strategy for StatefulSet                                                             | `{}`            |
+| `podAnnotations`            | Annotations for StatefulSet pod, and `garbageCollect` pod unless set explicitly there. See `garbageCollect` | `{}` |
+| `podLabels`                 | Labels for StatefulSet pod, and `garbageCollect` pod unless set explicitly there. See `garbageCollect` | `{}` |
 | `podDisruptionBudget`       | Pod disruption budget                                                                      | `{}`            |
 | `resources.limits.cpu`      | Container requested CPU                                                                    | `nil`           |
 | `resources.limits.memory`   | Container requested memory                                                                 | `nil`           |

@@ -1,5 +1,5 @@
 apiVersion: apps/v1
-kind: Deployment
+kind: StatefulSet
 metadata:
   name: {{ template "docker-registry.fullname" . }}
   namespace: {{ .Values.namespace | default .Release.Namespace }}
@@ -8,20 +8,20 @@ metadata:
     chart: {{ .Chart.Name }}-{{ .Chart.Version | replace "+" "_" }}
     release: {{ .Release.Name }}
     heritage: {{ .Release.Service }}
-{{- if .Values.deployment.annotations }}
+{{- if .Values.statefulset.annotations }}
   annotations:
-{{ toYaml .Values.deployment.annotations | indent 4 }}
+{{ toYaml .Values.statefulset.annotations | indent 4 }}
 {{- end }}
 spec:
+  serviceName: {{ template "docker-registry.fullname" . }}
+  replicas: {{ .Values.replicaCount }}
+  {{- if .Values.updateStrategy }}
+  updateStrategy: {{ toYaml .Values.updateStrategy | nindent 4 }}
+  {{- end }}
   selector:
     matchLabels:
       app: {{ template "docker-registry.name" . }}
       release: {{ .Release.Name }}
-  replicas: {{ .Values.replicaCount }}
-  {{- if .Values.updateStrategy }}
-  strategy: {{ toYaml .Values.updateStrategy | nindent 4 }}
-  {{- end }}
-  minReadySeconds: 5
   template:
     metadata:
       labels:
@@ -33,6 +33,9 @@ spec:
       annotations:
         checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
         checksum/secret: {{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum }}
+        {{- if .Values.ecrProxy.enabled }}
+        rollout/ecr-secret: {{ (lookup "v1" "Secret" .Release.Namespace .Values.ecrProxy.secretName).data | toJson | sha256sum }}
+        {{- end }}
         {{- if .Values.podAnnotations }}
         {{ toYaml .Values.podAnnotations | nindent 8 }}
         {{- end }}
@@ -58,9 +61,13 @@ spec:
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           command:
-          - /bin/registry
-          - serve
-          - {{ .Values.configPath }}/config.yml
+            - sh
+            - -c
+            - |
+              JSON_DATA=$(cat /dockerconfig/.dockerconfigjson)
+              export REGISTRY_PROXY_USERNAME=$(echo "$JSON_DATA" | sed -n 's/.*"username": *"\([^"]*\)".*/\1/p')
+              export REGISTRY_PROXY_PASSWORD=$(echo "$JSON_DATA" | sed -n 's/.*"password": *"\([^"]*\)".*/\1/p')
+              exec env REGISTRY_PROXY_USERNAME="$REGISTRY_PROXY_USERNAME" REGISTRY_PROXY_PASSWORD="$REGISTRY_PROXY_PASSWORD" /bin/registry serve /etc/distribution/config.yml
           ports:
             - containerPort: 5000
             {{- if .Values.metrics.enabled }}
@@ -69,25 +76,44 @@ spec:
               protocol: TCP
             {{- end }}
           livenessProbe:
+            {{- if .Values.probes.livenessProbe }}
+            {{ toYaml .Values.probes.livenessProbe | nindent 12 }}
+            {{- else }}
             httpGet:
               {{- if .Values.tlsSecretName }}
               scheme: HTTPS
               {{- end }}
               path: /
               port: 5000
+            {{- end }}
           readinessProbe:
+            {{- if .Values.probes.readinessProbe }}
+            {{ toYaml .Values.probes.readinessProbe | nindent 12 }}
+            {{- else }}
             httpGet:
               {{- if .Values.tlsSecretName }}
               scheme: HTTPS
               {{- end }}
               path: /
               port: 5000
+            {{- end }}
           resources: {{ toYaml .Values.resources | nindent 12 }}
           env: {{ include "docker-registry.envs" . | nindent 12 }}
           {{- if .Values.containerSecurityContext.enabled }}
           securityContext: {{ omit .Values.containerSecurityContext "enabled" | toYaml | nindent 12 }}
           {{- end }}
-          volumeMounts: {{ include "docker-registry.volumeMounts" . | nindent 12 }}
+          volumeMounts:
+            {{- include "docker-registry.volumeMounts" . | nindent 12 }}
+            {{- if .Values.ecrProxy.enabled }}
+            - name: dockerconfig-secret
+              mountPath: /dockerconfig
+              readOnly: true
+            {{- end }}
+            {{- if and (eq .Values.storage "s3") .Values.s3.enabled }}
+            - name: s3-credentials
+              mountPath: /etc/registry/s3
+              readOnly: true
+            {{- end }}
       {{- if .Values.nodeSelector }}
       nodeSelector: {{ toYaml .Values.nodeSelector | nindent 8 }}
       {{- end }}
@@ -97,4 +123,40 @@ spec:
       {{- if .Values.tolerations }}
       tolerations: {{ toYaml .Values.tolerations | nindent 8 }}
       {{- end }}
-      volumes: {{ include "docker-registry.volumes" . | nindent 8 }}
+      volumes:
+        {{- include "docker-registry.volumes" . | nindent 8 }}
+        {{- if .Values.ecrProxy.enabled }}
+        - name: dockerconfig-secret
+          secret:
+            secretName: {{ .Values.ecrProxy.secretName }}
+            items:
+              - key: .dockerconfigjson
+                path: .dockerconfigjson
+        {{- end }}
+        {{- if and (eq .Values.storage "s3") .Values.s3.enabled }}
+        - name: s3-credentials
+          secret:
+            secretName: {{ template "docker-registry.fullname" . }}-secret
+            items:
+              - key: s3AccessKey
+                path: accessKey
+              - key: s3SecretKey
+                path: secretKey
+        {{- end }}
+  {{- if and .Values.persistence.enabled (eq .Values.storage "filesystem") }}
+  volumeClaimTemplates:
+  - metadata:
+      name: data
+    spec:
+      accessModes: [ "{{ .Values.persistence.accessMode }}" ]
+      {{- if .Values.persistence.storageClass }}
+      {{- if (eq "-" .Values.persistence.storageClass) }}
+      storageClassName: ""
+      {{- else }}
+      storageClassName: "{{ .Values.persistence.storageClass }}"
+      {{- end }}
+      {{- end }}
+      resources:
+        requests:
+          storage: {{ .Values.persistence.size | quote }}
+  {{- end }} 

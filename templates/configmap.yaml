@@ -10,4 +10,9 @@ metadata:
     release: {{ .Release.Name }}
 data:
   config.yml: |-
+{{- if eq .Values.storage "s3" }}
+{{- $config := .Values.configData }}
+{{- $s3 := .Values.s3 }}
+{{- $_ := set $config "storage" (dict "s3" (dict "region" $s3.region "regionendpoint" $s3.regionEndpoint "bucket" $s3.bucket "rootdirectory" $s3.rootdirectory "encrypt" $s3.encrypt "secure" $s3.secure "forcepathstyle" $s3.forcepathstyle "skipverify" $s3.skipverify "accesskey" "/etc/registry/s3/accessKey" "secretkey" "/etc/registry/s3/secretKey")) }}
+{{- end }}
 {{ toYaml .Values.configData | indent 4 }}

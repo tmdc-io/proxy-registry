@@ -133,16 +133,6 @@ We truncate at 63 chars because some Kubernetes name fields are limited to this 
 {{- if .Values.proxy.enabled }}
 - name: REGISTRY_PROXY_REMOTEURL
   value: {{ required ".Values.proxy.remoteurl is required" .Values.proxy.remoteurl }}
-- name: REGISTRY_PROXY_USERNAME
-  valueFrom:
-    secretKeyRef:
-      name: {{ if .Values.proxy.secretRef }}{{ .Values.proxy.secretRef }}{{ else }}{{ template "docker-registry.fullname" . }}-secret{{ end }}
-      key: proxyUsername
-- name: REGISTRY_PROXY_PASSWORD
-  valueFrom:
-    secretKeyRef:
-      name: {{ if .Values.proxy.secretRef }}{{ .Values.proxy.secretRef }}{{ else }}{{ template "docker-registry.fullname" . }}-secret{{ end }}
-      key: proxyPassword
 {{- end -}}
 
 {{- if .Values.persistence.deleteEnabled }}
@@ -200,8 +190,13 @@ We truncate at 63 chars because some Kubernetes name fields are limited to this 
 {{- if eq .Values.storage "filesystem" }}
 - name: data
   {{- if .Values.persistence.enabled }}
+  {{- if .Values.persistence.existingClaim }}
   persistentVolumeClaim:
-    claimName: {{ if .Values.persistence.existingClaim }}{{ .Values.persistence.existingClaim }}{{- else }}{{ template "docker-registry.fullname" . }}{{- end }}
+    claimName: {{ .Values.persistence.existingClaim }}
+  {{- else }}
+  persistentVolumeClaim:
+    claimName: {{ template "docker-registry.fullname" . }}
+  {{- end }}
   {{- else }}
   emptyDir: {}
   {{- end -}}
@@ -216,4 +211,16 @@ We truncate at 63 chars because some Kubernetes name fields are limited to this 
 {{- with .Values.extraVolumes }}
 {{ toYaml . }}
 {{- end }}
+{{- end -}}
+
+{{- define "docker-registry.dockerconfigjson" -}}
+{
+  "auths": {
+    "{{ .Values.registryAuth.registryUrl | default (index .Values.ingress.hosts 0) }}": {
+      "username": "{{ .Values.registryAuth.username | default "admin" }}",
+      "password": "{{ .Values.registryAuth.password | default "securepassword123" }}",
+      "auth": "{{ printf "%s:%s" (.Values.registryAuth.username | default "admin") (.Values.registryAuth.password | default "securepassword123") | b64enc }}"
+    }
+  }
+}
 {{- end -}}

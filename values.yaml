@@ -1,13 +1,14 @@
 # Default values for docker-registry.
 # This is a YAML-formatted file.
 # Declare variables to be passed into your templates.
-replicaCount: 1
+# This chart now uses StatefulSet instead of Deployment for better state management.
+replicaCount: 2
 
-updateStrategy: {}
-  # type: RollingUpdate
-  # rollingUpdate:
-  #   maxSurge: 1
-  #   maxUnavailable: 0
+strategy:
+  type: RollingUpdate
+  rollingUpdate:
+    maxSurge: 1
+    maxUnavailable: 1
 
 podAnnotations: {}
 podLabels: {}
@@ -17,13 +18,21 @@ serviceAccount:
   name: ""
   annotations: {}
 
+fullnameOverride: registry
 image:
   repository: registry
   tag: 3.0.0
   pullPolicy: IfNotPresent
 # imagePullSecrets:
     # - name: docker
-deployment: {}
+
+# ECR Proxy Configuration
+ecrProxy:
+  enabled: true
+  # Secret containing ECR credentials (.dockerconfigjson format)
+  secretName: "dataos-container-registry"
+
+statefulset: {}
   # annotations:
 service:
   name: registry
@@ -40,21 +49,32 @@ service:
   labels: {}
   # foo.io/baz: "false"
 ingress:
-  enabled: false
-  className: nginx
+  enabled: true
+  className: "kong"
+  annotations:
+    konghq.com/https-redirect-status-code: "308"
+    konghq.com/protocols: http # Changed from https to http for cloudflare ssl termination
+    konghq.com/strip-path: "true"
+    # Allow large uploads for Docker images
+    konghq.com/client-max-body-size: "0"
+    konghq.com/read-timeout: "3600"
+    konghq.com/write-timeout: "3600"
+    konghq.com/connect-timeout: "60"
+    konghq.com/backend-protocol: "http"
+    # Docker registry specific headers - simplified
   path: /
+  pathType: ImplementationSpecific # Changed from Prefix to ImplementationSpecific to use same domain
   # Used to create an Ingress record.
   hosts:
-    - chart-example.local
+    - registry-<your-domain>
   annotations: {}
     # kubernetes.io/ingress.class: nginx
     # kubernetes.io/tls-acme: "true"
   labels: {}
   tls:
-    # Secrets must be manually created in the namespace.
-    # - secretName: chart-example-tls
-    #   hosts:
-    #     - chart-example.local
+    - secretName: registry-subdomain-tls
+      hosts:
+        - registry-<your-domain>
 resources: {}
   # We usually recommend not to specify default resources and to leave this as a conscious
   # choice for the user. This also increases chances charts run on environments with little
@@ -68,18 +88,38 @@ resources: {}
   #   memory: 128Mi
 persistence:
   accessMode: 'ReadWriteOnce'
-  enabled: false
+  enabled: true
   size: 10Gi
-  # storageClass: '-'
+  storageClass: "disk-premium-retain"
+  existingClaim: ""  # Set to PVC name to reuse existing PVC, leave empty to create new PVC with chart name
 
 # set the type of filesystem to use: filesystem, s3
 storage: filesystem
 
-# Set this to name of secret for tls certs
-# tlsSecretName: registry.docker.example.com
+# Probe configuration for better reliability
+probes:
+  livenessProbe:
+    httpGet:
+      path: /
+      port: 5000
+    initialDelaySeconds: 30
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 3
+  readinessProbe:
+    httpGet:
+      path: /
+      port: 5000
+    initialDelaySeconds: 5
+    periodSeconds: 5
+    timeoutSeconds: 3
+    failureThreshold: 3
 secrets:
   haSharedSecret: ""
-  htpasswd: ""
+  htpasswd: "admin:$2y$05$Um.CVlOu3sSUQd2jJKl3OutTdbHtHZpZWk1hb99Ep58wIMFoIm2cK"
+  # To change password run:
+  # docker run --entrypoint htpasswd httpd:2 -Bbn admin kuchnayapassword123 > ./htpasswd
+
 # Secrets for Azure
 #   azure:
 #     accountName: ""
@@ -87,25 +127,26 @@ secrets:
 #     container: ""
 # Secrets for S3 access and secret keys
 # Use a secretRef with keys (accessKey, secretKey) for secrets stored outside the chart
-#   s3:
-#     secretRef: ""
-#     accessKey: ""
-#     secretKey: ""
+  s3:
+    secretRef: ""
+    accessKey: ""
+    secretKey: ""
 # Secrets for Swift username and password
 #   swift:
 #     username: ""
 #     password: ""
 
 # Options for s3 storage type:
-# s3:
-#   region: us-east-1
-#   regionEndpoint: https://s3.us-east-1.amazonaws.com
-#   bucket: my-bucket
-#   rootdirectory: /object/prefix
-#   encrypt: false
-#   secure: true
-#   forcepathstyle: true
-#   skipverify: true
+s3:
+  enabled: true
+  region: ap-south-1
+  regionEndpoint: https://s3.ap-south-1.amazonaws.com/
+  bucket: ops001-famousgri-dev
+  rootdirectory: registry
+  encrypt: true
+  secure: true
+  forcepathstyle: true
+  skipverify: true
 
 # Options for swift storage type:
 # swift:
@@ -114,13 +155,13 @@ secrets:
 
 # https://docs.docker.com/registry/recipes/mirror/
 proxy:
-  enabled: false
+  enabled: true
   remoteurl: https://registry-1.docker.io
   username: ""
   password: ""
   # the ref for a secret stored outside of this chart
   # Keys: proxyUsername, proxyPassword
-  secretRef: ""
+  secretRef: "dataos-container-registry"
 
 metrics:
   enabled: false
@@ -144,6 +185,11 @@ configData:
   storage:
     cache:
       blobdescriptor: inmemory
+    delete:
+      enabled: true
+    # filesystem: #to add local storage for registry to push images
+    #   rootdirectory: /var/lib/registry #to add local storage for registry to push images
+    #   maxthreads: 100 #to add local storage for registry to push images
   http:
     addr: :5000
     headers:
@@ -153,11 +199,30 @@ configData:
       prometheus:
         enabled: false
         path: /metrics
+    # tls:
+    #   certificate: /etc/ssl/docker/tls.crt
+    #   key: /etc/ssl/docker/tls.key
+  auth:
+    htpasswd:
+      realm: basic-realm
+      path: /auth/htpasswd
   health:
     storagedriver:
       enabled: true
       interval: 10s
       threshold: 3
+  # Proxy configuration for ECR - this makes it work as a mirror
+  proxy:
+    remoteurl: https://registry-1.docker.io
+    username: ${REGISTRY_PROXY_USERNAME}
+    password: ${REGISTRY_PROXY_PASSWORD}
+    # Add these settings to make it work as a proper mirror
+    ttl: 720h # 30 days
+    # Enable caching
+    cache:
+      blobdescriptor: inmemory
+  tracing:
+    enabled: false
 
 containerSecurityContext:
   enabled: true
@@ -167,7 +232,7 @@ containerSecurityContext:
     drop:
       - ALL
   privileged: false
-  readOnlyRootFilesystem: true
+  readOnlyRootFilesystem: false
   runAsUser: 1000
   runAsGroup: 1000
   runAsNonRoot: true
@@ -184,7 +249,8 @@ securityContext:
 
 priorityClassName: ""
 
-podDisruptionBudget: {}
+podDisruptionBudget:
+  minAvailable: 1
   # maxUnavailable: 1
   # minAvailable: 2
 
@@ -216,7 +282,16 @@ nodeSelector: {}
 
 affinity: {}
 
-tolerations: []
+tolerations:
+  # Built-in tolerations for better availability
+  - key: node.kubernetes.io/unreachable
+    operator: Exists
+    effect: NoExecute
+    tolerationSeconds: 30
+  - key: node.kubernetes.io/not-ready
+    operator: Exists
+    effect: NoExecute
+    tolerationSeconds: 30
 
 extraVolumeMounts: []
 ## Additional volumeMounts to the registry container.
@@ -234,7 +309,9 @@ extraVolumes: []
 #          path: cloudfront.pem
 #          mode: 511
 
-extraEnvVars: []
+extraEnvVars:
+  - name: OTEL_TRACES_EXPORTER
+    value: "none"
 ## Additional ENV variables to set
 # - name: REGISTRY_STORAGE_FILESYSTEM_ROOTDIRECTORY
 #   value: "/var/lib/example"
@@ -262,3 +339,18 @@ garbageCollect:
   # requests:
   #   cpu: 100m
   #   memory: 128Mi
+
+# Registry Authentication Secret Configuration
+registryAuth:
+  enabled: true
+  secretName: "registry-auth-secret"
+  # Registry URL (defaults to ingress host if not specified)
+  registryUrl: ""
+  # Username for registry authentication (defaults to "admin")
+  username: "admin"
+  # Password for registry authentication (defaults to "securepassword123")
+  password: "securepassword123"
+  # annotation to sync in all namespaces
+  annotations:
+    caretaker.dataos.io/sync: "caretaker.dataos.io=sync"
+    manager.dataos.io/sync-options: "Prune=false"
