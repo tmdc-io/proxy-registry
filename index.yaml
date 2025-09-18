@@ -3,7 +3,23 @@ entries:
   proxy-registry:
   - apiVersion: v1
     appVersion: 3.0.1
-    created: "2025-09-15T01:26:17.266926252+05:30"
+    created: "2025-09-19T02:19:00.777545058+05:30"
+    description: A Helm chart for Docker Registry
+    digest: 290262c800533bbfef3625c4ef2f3746de429bc2d3ee5dd99c9667540aa1bfdf
+    home: https://hub.docker.com/_/registry/
+    icon: https://helm.twun.io/docker-registry.png
+    maintainers:
+    - email: anshul.thakkar@tmdc.io
+      name: Anshul Thakkar
+    name: proxy-registry
+    sources:
+    - https://github.com/docker/distribution-library-image
+    urls:
+    - https://tmdc-io.github.io/proxy-registry/proxy-registry-3.0.2.tgz
+    version: 3.0.2
+  - apiVersion: v1
+    appVersion: 3.0.1
+    created: "2025-09-19T02:19:00.772283011+05:30"
     description: A Helm chart for Docker Registry
     digest: 7d027759e330ca0f7706bc945d2699d7eac878abd1b1bb720cb217d4b5fee22a
     home: https://hub.docker.com/_/registry/
@@ -17,4 +33,4 @@ entries:
     urls:
     - https://tmdc-io.github.io/proxy-registry/proxy-registry-3.0.1.tgz
     version: 3.0.1
-generated: "2025-09-15T01:26:17.25840566+05:30"
+generated: "2025-09-19T02:19:00.770240733+05:30"
