@@ -40,7 +40,8 @@ service:
   # sessionAffinity: None
   # sessionAffinityConfig: {}
   # clusterIP:
-  port: 5000
+  port: 443
+  targetPort: 443
   # nodePort:
   # loadBalancerIP:
   # loadBalancerSourceRanges:
@@ -49,7 +50,7 @@ service:
   labels: {}
   # foo.io/baz: "false"
 ingress:
-  enabled: true
+  enabled: false
   className: "kong"
   annotations:
     konghq.com/https-redirect-status-code: "308"
@@ -101,7 +102,8 @@ probes:
   livenessProbe:
     httpGet:
       path: /
-      port: 5000
+      port: 443
+      scheme: HTTPS
     initialDelaySeconds: 30
     periodSeconds: 10
     timeoutSeconds: 5
@@ -109,7 +111,8 @@ probes:
   readinessProbe:
     httpGet:
       path: /
-      port: 5000
+      port: 443
+      scheme: HTTPS
     initialDelaySeconds: 5
     periodSeconds: 5
     timeoutSeconds: 3
@@ -293,13 +296,19 @@ tolerations:
     effect: NoExecute
     tolerationSeconds: 30
 
-extraVolumeMounts: []
+extraVolumeMounts:
+  - name: registry-tls
+    mountPath: /etc/registry/tls
+    readOnly: true
 ## Additional volumeMounts to the registry container.
 #  - mountPath: /secret-data
 #    name: cloudfront-pem-secret
 #    readOnly: true
 
-extraVolumes: []
+extraVolumes:
+  - name: registry-tls
+    secret:
+      secretName: registry-subdomain-tls
 ## Additional volumes to the pod.
 #  - name: cloudfront-pem-secret
 #    secret:
@@ -354,3 +363,43 @@ registryAuth:
   annotations:
     caretaker.dataos.io/sync: "caretaker.dataos.io=sync"
     manager.dataos.io/sync-options: "Prune=false"
+
+# Load Balancer Configuration
+loadBalancer:
+  enabled: false
+  type: "internal"  # internal, external, or custom
+  loadBalancerClass: ""  # Optional: specify load balancer class
+  loadBalancerIP: ""  # Optional: specify static IP
+
+  # Port configuration
+  ports:
+  - name: "https"
+    port: 443
+    targetPort: 443
+    protocol: "TCP"
+    # nodePort: 30443  # Optional: for NodePort type
+  
+  # Cloud-specific annotations
+  annotations: {}
+  
+  # GCP Configuration
+  gcp:
+    enabled: false
+    type: "internal"  # internal, external
+    subnets: []  # List of subnet names
+    # Example: ["dsck-sn-private-ltw-dev", "dsck-sn-private-ltw-prod"]
+    
+  # AWS Configuration  
+  aws:
+    enabled: false
+    type: "internal"  # internal, external, nlb
+    subnets: []  # List of subnet IDs
+    scheme: "internal"  # internal, internet-facing
+    # Example: ["subnet-12345", "subnet-67890"]
+    
+  # Azure Configuration
+  azure:
+    enabled: false
+    type: "internal"  # internal, external
+    subnets: []  # List of subnet names
+    # Example: ["private-subnet", "dmz-subnet"]

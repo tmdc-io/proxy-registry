@@ -1,0 +1,80 @@
+{{- if .Values.loadBalancer.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ template "docker-registry.fullname" . }}-{{ .Values.loadBalancer.type | default "internal" }}
+  namespace: {{ .Values.namespace | default .Release.Namespace }}
+  labels:
+    app: {{ template "docker-registry.name" . }}
+    chart: {{ .Chart.Name }}-{{ .Chart.Version | replace "+" "_" }}
+    release: {{ .Release.Name }}
+    heritage: {{ .Release.Service }}
+    component: loadbalancer
+  annotations:
+    {{- /* Base annotations */}}
+    {{- if .Values.loadBalancer.annotations }}
+    {{- toYaml .Values.loadBalancer.annotations | nindent 4 }}
+    {{- end }}
+    
+    {{- /* GCP Annotations */}}
+    {{- if .Values.loadBalancer.gcp.enabled }}
+    {{- if eq .Values.loadBalancer.gcp.type "internal" }}
+    networking.gke.io/load-balancer-type: "Internal"
+    {{- else }}
+    networking.gke.io/load-balancer-type: "External"
+    {{- end }}
+    {{- if .Values.loadBalancer.gcp.subnets }}
+    networking.gke.io/load-balancer-subnet: {{ join "," .Values.loadBalancer.gcp.subnets }}
+    {{- end }}
+    {{- end }}
+    
+    {{- /* AWS Annotations */}}
+    {{- if .Values.loadBalancer.aws.enabled }}
+    {{- if eq .Values.loadBalancer.aws.type "nlb" }}
+    service.beta.kubernetes.io/aws-load-balancer-type: "nlb"
+    {{- end }}
+    {{- if eq .Values.loadBalancer.aws.scheme "internal" }}
+    service.beta.kubernetes.io/aws-load-balancer-scheme: "internal"
+    {{- else }}
+    service.beta.kubernetes.io/aws-load-balancer-scheme: "internet-facing"
+    {{- end }}
+    {{- if .Values.loadBalancer.aws.subnets }}
+    service.beta.kubernetes.io/aws-load-balancer-subnets: {{ join "," .Values.loadBalancer.aws.subnets }}
+    {{- end }}
+    {{- if eq .Values.loadBalancer.aws.type "nlb" }}
+    service.beta.kubernetes.io/aws-load-balancer-backend-protocol: "tcp"
+    service.beta.kubernetes.io/aws-load-balancer-cross-zone-load-balancing-enabled: "true"
+    {{- end }}
+    {{- end }}
+    
+    {{- /* Azure Annotations */}}
+    {{- if .Values.loadBalancer.azure.enabled }}
+    service.beta.kubernetes.io/azure-load-balancer-internal: {{ if eq .Values.loadBalancer.azure.type "internal" }}"true"{{ else }}"false"{{ end }}
+    {{- if .Values.loadBalancer.azure.subnets }}
+    service.beta.kubernetes.io/azure-load-balancer-internal-subnet: {{ join "," .Values.loadBalancer.azure.subnets }}
+    {{- end }}
+    {{- end }}
+spec:
+  type: LoadBalancer
+  {{- if .Values.loadBalancer.loadBalancerClass }}
+  loadBalancerClass: {{ .Values.loadBalancer.loadBalancerClass }}
+  {{- end }}
+  {{- if .Values.loadBalancer.loadBalancerIP }}
+  loadBalancerIP: {{ .Values.loadBalancer.loadBalancerIP }}
+  {{- end }}
+  {{- if .Values.loadBalancer.allocateLoadBalancerNodePorts }}
+  allocateLoadBalancerNodePorts: {{ .Values.loadBalancer.allocateLoadBalancerNodePorts }}
+  {{- end }}
+  ports:
+  {{- range $port := .Values.loadBalancer.ports }}
+  - name: {{ $port.name | default "https" }}
+    port: {{ $port.port | default 443 }}
+    targetPort: {{ $port.targetPort | default 5000 }}
+    protocol: {{ $port.protocol | default "TCP" }}
+    {{- if $port.nodePort }}
+    nodePort: {{ $port.nodePort }}
+    {{- end }}
+  {{- end }}
+  selector:
+    app: {{ template "docker-registry.name" . }}
+    release: {{ .Release.Name }}
