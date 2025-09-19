@@ -202,9 +202,9 @@ configData:
       prometheus:
         enabled: false
         path: /metrics
-    # tls:
-    #   certificate: /etc/ssl/docker/tls.crt
-    #   key: /etc/ssl/docker/tls.key
+    tls:
+      certificate: /etc/registry/tls/tls.crt
+      key: /etc/registry/tls/tls.key
   auth:
     htpasswd:
       realm: basic-realm
