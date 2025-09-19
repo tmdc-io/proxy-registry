@@ -45,6 +45,13 @@ metadata:
     service.beta.kubernetes.io/aws-load-balancer-backend-protocol: "tcp"
     service.beta.kubernetes.io/aws-load-balancer-cross-zone-load-balancing-enabled: "true"
     {{- end }}
+    {{- /* NLB TLS Termination Annotations */}}
+    {{- if .Values.loadBalancer.aws.sslCertArn }}
+    service.beta.kubernetes.io/aws-load-balancer-ssl-cert: {{ .Values.loadBalancer.aws.sslCertArn }}
+    {{- end }}
+    {{- if .Values.loadBalancer.aws.sslPorts }}
+    service.beta.kubernetes.io/aws-load-balancer-ssl-ports: {{ .Values.loadBalancer.aws.sslPorts }}
+    {{- end }}
     {{- end }}
     
     {{- /* Azure Annotations */}}

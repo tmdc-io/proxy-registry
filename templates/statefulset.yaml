@@ -80,9 +80,7 @@ spec:
             {{ toYaml .Values.probes.livenessProbe | nindent 12 }}
             {{- else }}
             httpGet:
-              {{- if .Values.tlsSecretName }}
-              scheme: HTTPS
-              {{- end }}
+              scheme: HTTP
               path: /
               port: 5000
             {{- end }}
@@ -91,9 +89,7 @@ spec:
             {{ toYaml .Values.probes.readinessProbe | nindent 12 }}
             {{- else }}
             httpGet:
-              {{- if .Values.tlsSecretName }}
-              scheme: HTTPS
-              {{- end }}
+              scheme: HTTP
               path: /
               port: 5000
             {{- end }}

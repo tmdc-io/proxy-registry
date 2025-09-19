@@ -103,7 +103,7 @@ probes:
     httpGet:
       path: /
       port: 5000
-      scheme: HTTPS
+      scheme: HTTP
     initialDelaySeconds: 30
     periodSeconds: 10
     timeoutSeconds: 5
@@ -112,7 +112,7 @@ probes:
     httpGet:
       path: /
       port: 5000
-      scheme: HTTPS
+      scheme: HTTP
     initialDelaySeconds: 5
     periodSeconds: 5
     timeoutSeconds: 3
@@ -202,9 +202,6 @@ configData:
       prometheus:
         enabled: false
         path: /metrics
-    tls:
-      certificate: /etc/registry/tls/tls.crt
-      key: /etc/registry/tls/tls.key
   auth:
     htpasswd:
       realm: basic-realm
@@ -395,6 +392,9 @@ loadBalancer:
     type: "internal"  # internal, external, nlb
     subnets: []  # List of subnet IDs
     scheme: "internal"  # internal, internet-facing
+    # NLB TLS Termination Configuration
+    sslCertArn: ""  # ACM certificate ARN for TLS termination
+    sslPorts: "443"  # Ports to terminate TLS on
     # Example: ["subnet-12345", "subnet-67890"]
     
   # Azure Configuration
