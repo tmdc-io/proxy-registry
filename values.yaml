@@ -41,7 +41,7 @@ service:
   # sessionAffinityConfig: {}
   # clusterIP:
   port: 443
-  targetPort: 443
+  targetPort: 5000
   # nodePort:
   # loadBalancerIP:
   # loadBalancerSourceRanges:
@@ -102,7 +102,7 @@ probes:
   livenessProbe:
     httpGet:
       path: /
-      port: 443
+      port: 5000
       scheme: HTTPS
     initialDelaySeconds: 30
     periodSeconds: 10
@@ -111,7 +111,7 @@ probes:
   readinessProbe:
     httpGet:
       path: /
-      port: 443
+      port: 5000
       scheme: HTTPS
     initialDelaySeconds: 5
     periodSeconds: 5
@@ -194,7 +194,7 @@ configData:
     #   rootdirectory: /var/lib/registry #to add local storage for registry to push images
     #   maxthreads: 100 #to add local storage for registry to push images
   http:
-    addr: :443
+    addr: :5000
     headers:
       X-Content-Type-Options: [nosniff]
     debug:
@@ -375,7 +375,7 @@ loadBalancer:
   ports:
   - name: "https"
     port: 443
-    targetPort: 443
+    targetPort: 5000
     protocol: "TCP"
     # nodePort: 30443  # Optional: for NodePort type
   
